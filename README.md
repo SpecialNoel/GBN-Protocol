@@ -6,4 +6,4 @@
 
 This project is my attempt to implement the Go Back-N ARQ Protocol that works around with Datagrams, which are typically used by the User Datagram Protocol (UDP).
 
-While I was working on this project, I gathered some helpful resources and put them on [this google doc page](https://docs.google.com/document/d/1AHe0np6HijeZhNoe1dcFBgBWi6Vx1aejOqx8oMyDEVs/edit?usp=sharing). Appreciate their works because they really helped me understand concepts such as Sequence Numbers and Acknowledgement Numbers, Sliding Windows, and more. Copyrights go to their respective original authors.
+While I was working on this project, I gathered some helpful resources and put them on [this google doc page](https://docs.google.com/document/d/1AHe0np6HijeZhNoe1dcFBgBWi6Vx1aejOqx8oMyDEVs/edit?usp=sharing). Appreciate these works because they really helped me understand concepts such as Sequence Numbers and Acknowledgement Numbers, Sliding Windows, and more. Copyrights go to their respective original authors.
