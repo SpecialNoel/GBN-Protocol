@@ -1,6 +1,7 @@
 # Receiver.py
 
-# python3 Receiver.py -s 127.0.0.1 -p 8888
+# Usage: python3 Receiver.py -s serverIPAddress -p serverPortNumber
+# Example: python3 Receiver.py -s 127.0.0.1 -p 8888
 
 from socket import *
 import secrets

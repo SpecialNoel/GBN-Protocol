@@ -1,6 +1,7 @@
 # Sender.py
 
-# python3 Sender.py -s 127.0.0.1 -p 8888 -t apple.jpg OutputApple.jpg
+# Usage: python3 Sender.py -s serverIPAddress -p serverPortNumber -t filename1 filename2
+# Example: python3 Sender.py -s 127.0.0.1 -p 8888 -t apple.jpg OutputApple.jpg
 
 from pathlib import Path
 from socket import *
