@@ -18,7 +18,12 @@ if __name__=='__main__':
     
     # Compare the files to see whether they have the exact same content
     try:
-        print(f'{filename1} and {filename2} have the same content:', filecmp.cmp(filename1, filename2, shallow=False))
+        filesHasSameContent = filecmp.cmp(filename1, filename2, shallow=False)
+        if filesHasSameContent:
+            print(f'{filename1} and {filename2} have the same content')        
+        else:
+            print(f'{filename1} and {filename2} do not have the same content')    
+            os.rename(filename2, 'New' + filename2)
     except FileNotFoundError as e:
         print('Error: %s - %s.' % (e.filename, e.strerror))
         exit(0)

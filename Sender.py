@@ -1,6 +1,6 @@
 # Sender.py
 
-# Usage: python3 Sender.py -s serverIPAddress -p serverPortNumber -t filename1 filename2
+# Usage: python3 Sender.py -s senderIPAddress -p senderPortNumber -t filename1 filename2
 # Example: python3 Sender.py -s 127.0.0.1 -p 8888 -t apple.jpg OutputApple.jpg
 
 from pathlib import Path
@@ -21,7 +21,7 @@ def get_file_size(filename):
 
 # Read message from a byte file
 def read_file_content(filename):
-    message = ''
+    message = b''
     
     # Read all bytes from the input file
     with open(filename, 'rb') as bf:
@@ -32,6 +32,13 @@ def read_file_content(filename):
 # Get a payload from the input file. Mostly it has 1024 bytes, but the last payload could have less
 def get_current_payload(segmentIndex, numOfTotalSegments):
     global inputFileContent, payloadBufferSize
+    
+    '''
+    Example: numOfTotalSegments = 81, payloadBufferSize = 1024, inputFileContent is the content in file
+         segmentIndex = 0: startingIndex = 0 * 1024 = 0
+         since segmentIndex != 81-1 = 80, endingIndex = 0 + 1024 = 1024
+         payload = inputFileContent[0, 1024], from 0th byte to 1023th byte
+    '''
     
     # Get the current segment, call it payload
     startingIndex = segmentIndex * payloadBufferSize
@@ -72,6 +79,7 @@ def create_udp_socket():
 def bind_socket_to_address_and_port():
     global UDPSocket, senderName, senderPortNumber
     
+    # Bind sender IP and port to this UDP socekt
     UDPSocket.bind((senderName, senderPortNumber))
     
     return
@@ -79,23 +87,26 @@ def bind_socket_to_address_and_port():
 # ------------------------------------  Handle Timer  ------------------------------------ 
 
 def in_timer():
+    # Provide feedback of being in timer while spinning
     print('in timer')
     
     return
 
-# Start a new timer that will timeout 5 seconds
+# Start a new timer that will timeout after 5 seconds
 def start_timer():
     timer = threading.Timer(0, in_timer)
     
+    # Start timer
     timer.start()
     timer.join(timeout=5)
     
     return timer
 
 # Stop an existing timer
-def stop_timer(timer):
+def stop_timer(timer):    
+    # Cancel current timer
     timer.cancel()
-    
+        
     return
 
 # ------------------------------------  Handle Packets  ------------------------------------ 
@@ -104,6 +115,7 @@ def stop_timer(timer):
 def udt_send(packet):
     global UDPSocket, receiverName, receiverPortNumber
     
+    # Send packet to receiver with the specified receiver IP and port
     UDPSocket.sendto(packet, (receiverName, receiverPortNumber))
     
     return
@@ -111,10 +123,11 @@ def udt_send(packet):
 # Receive response
 def udt_rcv():
     global UDPSocket, messageBufferSize
-    
-    response, (socketServer, socketPort) = UDPSocket.recvfrom(messageBufferSize)
+
+    # Receive packet of up to 1039 bytes, along with specified receiver IP and port, from receiver
+    response, (socketName, socketPort) = UDPSocket.recvfrom(messageBufferSize)
         
-    return response, (socketServer, socketPort)
+    return response, (socketName, socketPort)
 
 # Generate a random ISN for sender from range [0, 2^32)
 def generate_random_initial_sequence_number():
@@ -126,9 +139,9 @@ def generate_checksum(payload):
 
 # Print every information about a packet
 def print_pkt_info(synBit, ackBit, finBit, seqNum, ackNum, checksum, payload):
-    print('Seq Num:', seqNum) # 4 bytes
-    print('Ack Num:', ackNum) # 4 bytes
-    print('Checksum:', checksum) # 4 bytes
+    print('Seq Num:', seqNum)       # 4 bytes
+    print('Ack Num:', ackNum)       # 4 bytes
+    print('Checksum:', checksum)    # 4 bytes
     print(f'Payload: {payload} \n') # up to 1024 bytes
     
     return 
@@ -137,11 +150,14 @@ def print_pkt_info(synBit, ackBit, finBit, seqNum, ackNum, checksum, payload):
 def make_pkt(payload):
     global senderSeqNum, senderAckNum, synBit, ackBit, finBit, pktFormat
     
+    # Calculate the checksum for payload
     checksum = generate_checksum(payload)
         
+    # Print out info about this pkt
     print('Sender Packet Info:')
     print_pkt_info(synBit, ackBit, finBit, senderSeqNum, senderAckNum, checksum, payload)
     
+    # Generate pkt with pack(header, checksum) and payload
     pkt = struct.pack('!BBBIII', synBit, ackBit, finBit, senderSeqNum, senderAckNum, checksum) + payload
 
     return pkt
@@ -150,9 +166,11 @@ def make_pkt(payload):
 def decompose_pkt(pkt):
     global pktFormat
     
+    # fields in the 15-byte Header of the rcvpkt
     receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum = struct.unpack('!BBBIII', pkt[:15])
     payload = pkt[15:]
     
+    # Print out info about this pkt
     print('Sender received from Receiver:')
     print_pkt_info(receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload)
     
@@ -170,22 +188,24 @@ def perform_three_way_handshake():
     # Sender receives SYN packet sent by Receiver
     response, (address, port) = udt_rcv()
     
-    # Accept Receiver socket's address name and port number
+    # Record Receiver IP address name and port number
     receiverName, receiverPortNumber = address, port
     
+    # Set sender ack num to be receiver seq num + 1
     seqNum = decompose_pkt(response)[3]
-    senderAckNum = seqNum + 1 # set sender ack num to be receiver seq num
+    senderAckNum = seqNum + 1
         
     # Sender sends SYN/ACK packet with its ISN (Y) and Receiver's ISN+1 (X+1) to Receiver  
     synBit, ackBit = 1, 1
     synAckPacket = make_pkt(b'SYN/ACK')
     udt_send(synAckPacket)
-    senderSeqNum += 1 # Increment sender seq num b/c of the phantom byte
+    senderSeqNum += 1 # Increment sender seq num because of the phantom byte
         
     # Sender receives ACK packet sent by Receiver
     response = udt_rcv()[0]
     decompose_pkt(response)
     
+    # Reset SYN and ACK bits to 0
     synBit, ackBit = 0, 0
     
     return
@@ -211,22 +231,25 @@ def perform_connection_termination():
     udt_send(finPacket)
     senderSeqNum += 1
     
+    # Reset ACK and FIN bits to 0
     ackBit, finBit = 0, 0
     
     return
 
+# Perform sender side GBN operations
 def perform_sender_operation():
-    global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize, numOfTimesTimedout
-    
-    # Calculate the number of segments we'll be dividing the input file, each segment is up to 1024 bytes
+    global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize
+        
+    # Calculate the amount of segments we'll be dividing the input file; each segment is up to 1024 bytes
     segmentIndex = 0
     numOfTotalSegments = 0
     if fileSize % payloadBufferSize == 0:
         numOfTotalSegments = math.floor(fileSize / payloadBufferSize)        
     else: 
         numOfTotalSegments = math.floor(fileSize / payloadBufferSize) + 1
-    
-    # Server should do the following operation endlessly, until all packets have been sent to Receiver
+        
+    # Sender should do the following operation endlessly, 
+    #   until Sender knows that all packets have been correctly sent to Receiver
     while True:
         # Every in input file was sent. Now send FIN packet to Receiver
         if segmentIndex == numOfTotalSegments:
@@ -235,21 +258,21 @@ def perform_sender_operation():
         
         # Event: Send packet to Receiver
         if senderSeqNum < sendBase + senderWindowSize:
-            # Get current segment
+            # Get current segment, then increment segment index by 1
             sendPayload = get_current_payload(segmentIndex, numOfTotalSegments)
             segmentIndex += 1
             
-            # Make the segment a packet
+            # Make the segment a packet by adding a header to it
             sndpkt[senderSeqNum] = make_pkt(sendPayload)
             
-            # Send the packet
+            # Send the packet to Receiver
             udt_send(sndpkt[senderSeqNum])
 
             # Start timer for the oldest on-flight packet
             if sendBase == senderSeqNum:
                 timer = start_timer()
             
-            # Increment senderSeqNum since we just sent a packet
+            # Increment senderSeqNum by 1 since we just sent a packet
             senderSeqNum += 1
         
         # Event: Receive packet from Receiver
@@ -270,9 +293,7 @@ def perform_sender_operation():
         if not timer.is_alive():
             # Restart timer upon timeout
             timer = start_timer()
-            
-            numOfTimesTimedout += 1
-            
+                        
             # Retransmit N packets (all packets in the sender window)
             for i in range(sendBase, senderSeqNum):
                 udt_send(sndpkt[i])
@@ -283,13 +304,11 @@ def perform_sender_operation():
 
 if __name__ == '__main__':
     startTime = time.time()
-    
-    numOfTimesTimedout = 0
-    
+        
     # ------------------------------------  Variables  ------------------------------------ 
     
     # Buffer size of a packet 
-    # 99 bits (but we count for 1-byte * 3 + 4-byte * 3 = 15 bytes) for header
+    # 99 bits (1-bit * 3 + 4-byte * 3 = 99 bits, but we count for 1-byte * 3 + 4-byte * 3 = 15 bytes) for header
     # Up to 1024 bytes for payload
     headerBufferSize = 15 # 15 bytes
     payloadBufferSize = 1024 # 1024 bytes
@@ -298,27 +317,34 @@ if __name__ == '__main__':
     # Sender SYN, ACK and FIN flag bits
     synBit, ackBit, finBit = 0, 0, 0
     
+    # Any packet (segment with header) that is sent by Sender will be added to sndpkt
+    # sndpkt is used for retransmitting unacknowledged packets upon timeout of the timer
     sndpkt = {}
     
     # Initialization of sender seq num and ack num
     # Assume senderSeqNum = Y, senderAckNum = 0
     senderSeqNum = generate_random_initial_sequence_number()
     senderAckNum = 0
-    
+ 
     # ------------------------------------  Basic Setup  ------------------------------------ 
     
     # Get global values from sys.argv
     senderName, senderPortNumber, filename1, filename2 = setup_arguments()
     
+    # Initialize receiver IP and port number
     receiverName, receiverPortNumber = '', 0
     
     # Create sender UDP socket
     UDPSocket = create_udp_socket()
     
+    # Bind Sender IP and port to the UDP socket
     bind_socket_to_address_and_port()
     
     # Get the size of input file
-    fileSize = get_file_size(filename1)
+    try:
+        fileSize = get_file_size(filename1)
+    except FileNotFoundError as e:
+        print('Error: %s - %s.' % (e.filename, e.strerror))
     
     # Read byte message of content from input file
     inputFileContent = read_file_content(filename1)
@@ -328,6 +354,7 @@ if __name__ == '__main__':
     print('senderSeqNum:', senderSeqNum)
     print(f'senderAckNum: {senderAckNum} \n')
     
+    # Perform handshake with receiver
     perform_three_way_handshake()
     
     # After performing three-way handshake:
@@ -340,7 +367,7 @@ if __name__ == '__main__':
     
     # Sender send base
     sendBase = senderSeqNum
-    # Sender window size N
+    # Sender window size N=16
     senderWindowSize = 16
     
     perform_sender_operation()
@@ -348,8 +375,7 @@ if __name__ == '__main__':
     # Close UDP socket
     UDPSocket.close()
     
+    # Print out the amount of time used for executing this program
     endTime = time.time()
-
     print('Time lapsed in seconds: {:0.2f}'.format(endTime - startTime))
     
-    print('Number of time timed out:', numOfTimesTimedout)

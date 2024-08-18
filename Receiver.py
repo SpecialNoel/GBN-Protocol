@@ -3,12 +3,16 @@
 # Usage: python3 Receiver.py -s serverIPAddress -p serverPortNumber
 # Example: python3 Receiver.py -s 127.0.0.1 -p 8888
 
+# To execute Receiver.py, run the sender side program (Sender.py) first.
+
 from socket import *
 import secrets
 import struct
 import sys
 import time
 import zlib
+
+import os
 
 # ------------------------------------  Handle Files  ------------------------------------
 
@@ -237,3 +241,8 @@ if __name__ == '__main__':
     endTime = time.time()
 
     print('Time lapsed in seconds: {:0.2f}'.format(endTime - startTime))
+    
+    '''
+    # For testing with Simulator
+    os.system('python3 FileComparer.py apple.jpg OutputApple.jpg')
+    '''
