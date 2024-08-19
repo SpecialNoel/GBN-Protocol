@@ -1,7 +1,7 @@
 # Sender.py
 
 # Usage: python3 Sender.py -s senderIPAddress -p senderPortNumber -t filename1 filename2
-# Example: python3 Sender.py -s 127.0.0.1 -p 8888 -t apple.jpg OutputApple.jpg
+# Example: python3 Sender.py -s 127.0.0.1 -p 8888 -t Apple.jpg OutputApple.jpg
 
 from pathlib import Path
 from socket import *
@@ -15,29 +15,29 @@ import zlib
 
 # ------------------------------------  Handle Files  ------------------------------------
 
-# Get the size (int) of a string file
+# Get the size (int) of the string file
 def get_file_size(filename):
     return Path(filename).stat().st_size
 
-# Read message from a byte file
+# Read content in bytes from the string file
 def read_file_content(filename):
-    message = b''
+    content = b''
     
-    # Read all bytes from the input file
+    # Read all bytes from the file
     with open(filename, 'rb') as bf:
-        message = bf.read()
+        content = bf.read()
 
-    return message
+    return content
 
 # Get a payload from the input file. Mostly it has 1024 bytes, but the last payload could have less
-def get_current_payload(segmentIndex, numOfTotalSegments):
-    global inputFileContent, payloadBufferSize
+def get_one_payload_from_input_file(segmentIndex, numOfTotalSegments):
+    global fileContent, payloadBufferSize
     
     '''
-    Example: numOfTotalSegments = 81, payloadBufferSize = 1024, inputFileContent is the content in file
+    Example: numOfTotalSegments = 81, payloadBufferSize = 1024, fileContent is the content in file
          segmentIndex = 0: startingIndex = 0 * 1024 = 0
          since segmentIndex != 81-1 = 80, endingIndex = 0 + 1024 = 1024
-         payload = inputFileContent[0, 1024], from 0th byte to 1023th byte
+         payload = fileContent[0, 1024], from 0th byte to 1023th byte
     '''
     
     # Get the current segment, call it payload
@@ -45,29 +45,29 @@ def get_current_payload(segmentIndex, numOfTotalSegments):
 
     if segmentIndex != numOfTotalSegments - 1:
         endingIndex = startingIndex + payloadBufferSize
-        payload = inputFileContent[startingIndex:endingIndex]
+        payload = fileContent[startingIndex:endingIndex]
     else:
-        payload = inputFileContent[startingIndex:]
+        payload = fileContent[startingIndex:]
     
     return payload
 
 # ------------------------------------  Handle Some Basic Operations  ------------------------------------ 
 
-# Get senderName, senderPortNumber, filename1 and filename2 based on sys.argv
+# Get senderIPAddress, senderPortNumber, filename1 and filename2 based on sys.argv
 # If received sys.argv does not include [5], [6] and [7], use default values on [6] and [7].
 def setup_arguments():
     '''
     sys.argv[0]: Sender.py;            sys.argv[1]: -s
-    sys.argv[2]: <senderName>;         sys.argv[3]: -p
+    sys.argv[2]: <senderIPAddress>;    sys.argv[3]: -p
     sys.argv[4]: <senderPortNumber>;   sys.argv[5]: -t
     sys.argv[6]: <filename1>;           sys.argv[7]: <filename2>
     '''
-    senderName = sys.argv[2]
+    senderIPAddress = sys.argv[2]
     senderPortNumber = (int)(sys.argv[4])
     filename1 = sys.argv[6]
     filename2 = sys.argv[7]
 
-    return (senderName, senderPortNumber, filename1, filename2)
+    return (senderIPAddress, senderPortNumber, filename1, filename2)
 
 # Create a new UDP socket
 def create_udp_socket():
@@ -75,12 +75,12 @@ def create_udp_socket():
     
     return UDPSocket
 
-# Bind UDP socket with tuple <senderName, senderPortNumber>
+# Bind UDP socket with tuple <senderIPAddress, senderPortNumber>
 def bind_socket_to_address_and_port():
-    global UDPSocket, senderName, senderPortNumber
+    global UDPSocket, senderIPAddress, senderPortNumber
     
-    # Bind sender IP and port to this UDP socekt
-    UDPSocket.bind((senderName, senderPortNumber))
+    # Bind Sender IP and port to this UDP socekt
+    UDPSocket.bind((senderIPAddress, senderPortNumber))
     
     return
 
@@ -113,10 +113,10 @@ def stop_timer(timer):
 
 # Send message
 def udt_send(packet):
-    global UDPSocket, receiverName, receiverPortNumber
+    global UDPSocket, receiverIPAddress, receiverPortNumber
     
-    # Send packet to receiver with the specified receiver IP and port
-    UDPSocket.sendto(packet, (receiverName, receiverPortNumber))
+    # Send packet to Receiver with the specified Receiver IP and port
+    UDPSocket.sendto(packet, (receiverIPAddress, receiverPortNumber))
     
     return
 
@@ -124,12 +124,12 @@ def udt_send(packet):
 def udt_rcv():
     global UDPSocket, messageBufferSize
 
-    # Receive packet of up to 1039 bytes, along with specified receiver IP and port, from receiver
-    response, (socketName, socketPort) = UDPSocket.recvfrom(messageBufferSize)
+    # Receive packet of up to 1039 bytes, along with specified Receiver IP and port, from Receiver
+    response, (socketIPAddress, socketPortNumber) = UDPSocket.recvfrom(messageBufferSize)
         
-    return response, (socketName, socketPort)
+    return response, (socketIPAddress, socketPortNumber)
 
-# Generate a random ISN for sender from range [0, 2^32)
+# Generate a random ISN for Sender from range [0, 2^32)
 def generate_random_initial_sequence_number():
     return secrets.randbelow(2 ** 32)
 
@@ -177,21 +177,21 @@ def decompose_pkt(pkt):
     return receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload
 
 # Check checksum to ensure the content of payload is not corrupted during transmission
-def corrupt(payload, providedChecksum):    
+def is_corrupted(payload, providedChecksum):    
     return generate_checksum(payload) != providedChecksum
 
 # ------------------------------------  Handle Relaying Packets  ------------------------------------ 
 
 def perform_three_way_handshake():
-    global UDPSocket, messageBufferSize, synBit, ackBit, senderSeqNum, senderAckNum, receiverName, receiverPortNumber
+    global UDPSocket, messageBufferSize, synBit, ackBit, senderSeqNum, senderAckNum, receiverIPAddress, receiverPortNumber
         
     # Sender receives SYN packet sent by Receiver
     response, (address, port) = udt_rcv()
     
     # Record Receiver IP address name and port number
-    receiverName, receiverPortNumber = address, port
+    receiverIPAddress, receiverPortNumber = address, port
     
-    # Set sender ack num to be receiver seq num + 1
+    # Set Sender ack num to be Receiver seq num + 1
     seqNum = decompose_pkt(response)[3]
     senderAckNum = seqNum + 1
         
@@ -199,7 +199,7 @@ def perform_three_way_handshake():
     synBit, ackBit = 1, 1
     synAckPacket = make_pkt(b'SYN/ACK')
     udt_send(synAckPacket)
-    senderSeqNum += 1 # Increment sender seq num because of the phantom byte
+    senderSeqNum += 1 # Increment Sender seq num because of the phantom byte
         
     # Sender receives ACK packet sent by Receiver
     response = udt_rcv()[0]
@@ -236,9 +236,12 @@ def perform_connection_termination():
     
     return
 
-# Perform sender side GBN operations
+# Perform Sender side GBN operations
 def perform_sender_operation():
-    global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize
+    global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize, filename2
+    
+    # Used to keep track of whether filename2 is already sent by Sender or not
+    filenameSent = False
         
     # Calculate the amount of segments we'll be dividing the input file; each segment is up to 1024 bytes
     segmentIndex = 0
@@ -258,9 +261,15 @@ def perform_sender_operation():
         
         # Event: Send packet to Receiver
         if senderSeqNum < sendBase + senderWindowSize:
-            # Get current segment, then increment segment index by 1
-            sendPayload = get_current_payload(segmentIndex, numOfTotalSegments)
-            segmentIndex += 1
+            # Send filename to Receiver
+            if not filenameSent:
+                sendPayload = filename2.encode()
+                filenameSent = True
+            else:
+                # Send filecontent to Receiver
+                # Get current segment, then increment segment index by 1
+                sendPayload = get_one_payload_from_input_file(segmentIndex, numOfTotalSegments)
+                segmentIndex += 1
             
             # Make the segment a packet by adding a header to it
             sndpkt[senderSeqNum] = make_pkt(sendPayload)
@@ -279,7 +288,7 @@ def perform_sender_operation():
         rcvpkt = udt_rcv()[0]
         if rcvpkt:
             receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload = decompose_pkt(rcvpkt)
-            if not corrupt(payload, checksum):
+            if not is_corrupted(payload, checksum):
                 # Sender correctly acknowledged that Receiver has correctly received the packet, increment sendBase
                 sendBase = ackNum + 1
                 
@@ -294,7 +303,7 @@ def perform_sender_operation():
             # Restart timer upon timeout
             timer = start_timer()
                         
-            # Retransmit N packets (all packets in the sender window)
+            # Retransmit N packets (i.e. all packets in the Sender window)
             for i in range(sendBase, senderSeqNum):
                 udt_send(sndpkt[i])
                 
@@ -321,20 +330,20 @@ if __name__ == '__main__':
     # sndpkt is used for retransmitting unacknowledged packets upon timeout of the timer
     sndpkt = {}
     
-    # Initialization of sender seq num and ack num
+    # Initialization of Sender seq num and ack num
     # Assume senderSeqNum = Y, senderAckNum = 0
     senderSeqNum = generate_random_initial_sequence_number()
     senderAckNum = 0
- 
+     
     # ------------------------------------  Basic Setup  ------------------------------------ 
     
     # Get global values from sys.argv
-    senderName, senderPortNumber, filename1, filename2 = setup_arguments()
+    senderIPAddress, senderPortNumber, filename1, filename2 = setup_arguments()
     
-    # Initialize receiver IP and port number
-    receiverName, receiverPortNumber = '', 0
+    # Initialize Receiver IP and port number
+    receiverIPAddress, receiverPortNumber = '', 0
     
-    # Create sender UDP socket
+    # Create Sender UDP socket
     UDPSocket = create_udp_socket()
     
     # Bind Sender IP and port to the UDP socket
@@ -347,14 +356,14 @@ if __name__ == '__main__':
         print('Error: %s - %s.' % (e.filename, e.strerror))
     
     # Read byte message of content from input file
-    inputFileContent = read_file_content(filename1)
+    fileContent = read_file_content(filename1)
     
     # ------------------------------------  Handshake  ------------------------------------ 
     
     print('senderSeqNum:', senderSeqNum)
     print(f'senderAckNum: {senderAckNum} \n')
     
-    # Perform handshake with receiver
+    # Perform handshake with Receiver
     perform_three_way_handshake()
     
     # After performing three-way handshake:

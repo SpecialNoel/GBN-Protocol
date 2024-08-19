@@ -1,7 +1,7 @@
 # FileComparer.py
 
 # Usage: python3 FileComparer.py filename1 filename2
-# Example: python3 FileComparer.py apple.jpg OutputApple.jpg
+# Example: python3 FileComparer.py Apple.jpg OutputApple.jpg
 
 import filecmp
 import os

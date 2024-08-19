@@ -3,7 +3,7 @@
 # Usage: python3 Receiver.py -s serverIPAddress -p serverPortNumber
 # Example: python3 Receiver.py -s 127.0.0.1 -p 8888
 
-# To execute Receiver.py, run the sender side program (Sender.py) first.
+# To execute Receiver.py, run the Sender side program (Sender.py) first.
 
 from socket import *
 import secrets
@@ -16,7 +16,7 @@ import os
 
 # ------------------------------------  Handle Files  ------------------------------------
 
-# Append message to a byte file
+# Append content to a byte file
 def deliver_data(payload, filename):
     with open(filename, 'ab') as bf:
         bf.write(payload)
@@ -25,17 +25,17 @@ def deliver_data(payload, filename):
 
 # ------------------------------------  Handle Some Basic Operations  ------------------------------------ 
 
-# Get senderName and senderPortNumber based on sys.argv
+# Get senderIPAddress and senderPortNumber based on sys.argv
 def setup_arguments():
     '''
     sys.argv[0]: Receiver.py;           sys.argv[1]: -s
-    sys.argv[2]: <senderName>;          sys.argv[3]: -p
+    sys.argv[2]: <senderIPAddress>;     sys.argv[3]: -p
     sys.argv[4]: <senderPortNumber>
     '''
-    senderName = sys.argv[2]
+    senderIPAddress = sys.argv[2]
     senderPortNumber = (int)(sys.argv[4])
         
-    return (senderName, senderPortNumber)
+    return (senderIPAddress, senderPortNumber)
 
 # Create a new UDP socket
 def create_udp_socket():
@@ -47,9 +47,9 @@ def create_udp_socket():
 
 # Send message
 def udt_send(packet):
-    global UDPSocket, senderName, senderPortNumber
+    global UDPSocket, senderIPAddress, senderPortNumber
     
-    UDPSocket.sendto(packet, (senderName, senderPortNumber))
+    UDPSocket.sendto(packet, (senderIPAddress, senderPortNumber))
     
     return
 
@@ -61,7 +61,7 @@ def udt_rcv():
         
     return response, (socketServer, socketPort)
 
-# Generate a random ISN for receiver from range [0, 2^32)
+# Generate a random ISN for Receiver from range [0, 2^32)
 def generate_random_initial_sequence_number():
     return secrets.randbelow(2 ** 32)
 
@@ -104,7 +104,7 @@ def decompose_pkt(pkt):
     return receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload
 
 # Check checksum to ensure the content of payload is not corrupted during transmission
-def corrupt(payload, providedChecksum):    
+def is_corrupted(payload, providedChecksum):    
     return generate_checksum(payload) != providedChecksum
 
 # ------------------------------------  Handle Relaying Packets  ------------------------------------ 
@@ -116,12 +116,12 @@ def perform_three_way_handshake():
     synBit, ackBit = 1, 0
     synPacket = make_pkt(b'SYN')
     udt_send(synPacket)
-    receiverSeqNum += 1 # Increment receiver seq num b/c of the phantom byte
+    receiverSeqNum += 1 # Increment Receiver seq num b/c of the phantom byte
         
     # Receiver receives SYN/ACK packet sent by Sender
     response = udt_rcv()[0]
     seqNum = decompose_pkt(response)[3]
-    receiverAckNum = seqNum + 1 # set receiver ack num to be sender seq num
+    receiverAckNum = seqNum + 1 # set Receiver ack num to be Sender seq num
         
     # Receiver sends ACK packet with Sender's ISN + 1 (Y+1) to Sender
     synBit, ackBit = 0, 1
@@ -156,22 +156,31 @@ def perform_connection_termination():
 def perform_receiver_operation():
     global UDPSocket, receiverAckNum, sndpkt, fileSize, payloadBufferSize, filename
     
+    # Used to keep track of whether filename is already receiver by Receiver or not
+    filenameReceived = False
+    
     # Receiver should do the following operation endlessly, until receiving FIN packet from Sender
     while True:
         # Event: Receive packet from Receiver
         rcvpkt = udt_rcv()[0]
         if rcvpkt:
             receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload = decompose_pkt(rcvpkt)
-            if not corrupt(payload, checksum) and receivedFinBit == 1:
+            if not is_corrupted(payload, checksum) and receivedFinBit == 1:
                 # Every in input file was received. Now receive FIN packet from Sender
                 print('Hello, world')
                 perform_connection_termination()
                 break
-            elif not corrupt(payload, checksum) and receiverAckNum == seqNum:
-                # Received in-order packet correctly. 
-                # Now send an acknowledgement packet with current ack number (receiverAckNum) back to Sender.
-                # Then, increment current ack number by one
-                deliver_data(payload, filename)
+            elif not is_corrupted(payload, checksum) and receiverAckNum == seqNum:
+                # Received in-order packet correctly from Sender
+                if not filenameReceived:
+                    # Received filename from Sender
+                    filename = payload.decode()
+                    filenameReceived = True
+                else: 
+                    # Received file content from Sender 
+                    # Now send an acknowledgement packet with current ack number (receiverAckNum) back to Sender.
+                    # Then, increment current ack number by one
+                    deliver_data(payload, filename)
                 sndpkt = make_pkt(b'')
                 udt_send(sndpkt)
                 receiverAckNum += 1
@@ -200,10 +209,10 @@ if __name__ == '__main__':
     payloadBufferSize = 1024 # 1024 bytes
     messageBufferSize = headerBufferSize + payloadBufferSize # 1039 bytes
     
-    # Sender SYN, ACK and FIN flag bits
+    # Receiver SYN, ACK and FIN flag bits
     synBit, ackBit, finBit = 0, 0, 0
         
-    # Initialization of receiver seq num and ack num
+    # Initialization of Receiver seq num and ack num
     # Assume receiverSeqNum = X, receiverAckNum = 0
     receiverSeqNum = generate_random_initial_sequence_number()
     receiverAckNum = 0
@@ -211,12 +220,14 @@ if __name__ == '__main__':
     # ------------------------------------  Basic Setup  ------------------------------------ 
     
     # Get global values from sys.argv
-    senderName, senderPortNumber = setup_arguments()
+    senderIPAddress, senderPortNumber = setup_arguments()
     
-    # Create sender UDP socket
+    # Create Receiver UDP socket
     UDPSocket = create_udp_socket()
     
-    filename = 'OutputApple.jpg'
+    # The filename used to store the requested file from Sender
+    # It will have the exact name as Sender's filename2
+    filename = ''
     
     # ------------------------------------  Handshake  ------------------------------------ 
     
@@ -231,7 +242,7 @@ if __name__ == '__main__':
     print(f'\nreceiverSeqNum: {receiverSeqNum}')
     print(f'receiverAckNum: {receiverAckNum} \n')
     
-    # ------------------------------------  Sender Operation  ------------------------------------ 
+    # ------------------------------------  Receiver Operation  ------------------------------------ 
         
     perform_receiver_operation()
     
