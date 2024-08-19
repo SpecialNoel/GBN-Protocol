@@ -10,7 +10,7 @@ import sys
 import time
 
 def execute_sender():
-    os.system('python3 Sender.py -s 127.0.0.1 -p 8888 -t apple.jpg OutputApple.jpg')
+    os.system('python3 Sender.py -s 127.0.0.1 -p 8888 -t Apple.jpg OutputApple.jpg')
 
 def execute_receiver():
     os.system('python3 Receiver.py -s 127.0.0.1 -p 8888')

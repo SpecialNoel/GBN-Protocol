@@ -86,26 +86,24 @@ def bind_socket_to_address_and_port():
 
 # ------------------------------------  Handle Timer  ------------------------------------ 
 
-def in_timer():
-    # Provide feedback of being in timer while spinning
-    print('in timer')
+# A thread operation that timeout the timer after 5 seconds
+def timer_thread(arg1, stop_event):
+    while not stop_event.is_set():
+        stop_event.wait(timeout=5)
     
     return
 
 # Start a new timer that will timeout after 5 seconds
 def start_timer():
-    timer = threading.Timer(0, in_timer)
+    t_stop = threading.Event()
+    timer = threading.Thread(target=timer_thread, args=(1, t_stop))
     
-    # Start timer
-    timer.start()
-    timer.join(timeout=5)
-    
-    return timer
+    return timer, t_stop
 
 # Stop an existing timer
-def stop_timer(timer):    
+def stop_timer(stop_event):    
     # Cancel current timer
-    timer.cancel()
+    stop_event.set()
         
     return
 
@@ -279,7 +277,7 @@ def perform_sender_operation():
 
             # Start timer for the oldest on-flight packet
             if sendBase == senderSeqNum:
-                timer = start_timer()
+                timer, t_stop = start_timer()
             
             # Increment senderSeqNum by 1 since we just sent a packet
             senderSeqNum += 1
@@ -294,14 +292,14 @@ def perform_sender_operation():
                 
                 # Stop or start timer accordingly
                 if sendBase == senderSeqNum:
-                    stop_timer(timer)
+                    stop_timer(t_stop)
                 else:
-                    timer = start_timer()
+                    timer, t_stop = start_timer()
 
         # Event: Timeout
         if not timer.is_alive():
             # Restart timer upon timeout
-            timer = start_timer()
+            timer, t_stop = start_timer()
                         
             # Retransmit N packets (i.e. all packets in the Sender window)
             for i in range(sendBase, senderSeqNum):

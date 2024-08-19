@@ -167,7 +167,6 @@ def perform_receiver_operation():
             receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload = decompose_pkt(rcvpkt)
             if not is_corrupted(payload, checksum) and receivedFinBit == 1:
                 # Every in input file was received. Now receive FIN packet from Sender
-                print('Hello, world')
                 perform_connection_termination()
                 break
             elif not is_corrupted(payload, checksum) and receiverAckNum == seqNum:
@@ -253,7 +252,7 @@ if __name__ == '__main__':
 
     print('Time lapsed in seconds: {:0.2f}'.format(endTime - startTime))
     
-    '''
+    
     # For testing with Simulator
     os.system('python3 FileComparer.py apple.jpg OutputApple.jpg')
-    '''
+    
