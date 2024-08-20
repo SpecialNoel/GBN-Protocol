@@ -63,7 +63,16 @@ def udt_rcv():
 
 # Generate a random ISN for Receiver from range [0, 2^32)
 def generate_random_initial_sequence_number():
-    return secrets.randbelow(2 ** 32)
+    return secrets.randbelow(2 ** 32) + (2 ** 32 - 1)
+
+# Refactor Receiver seq num and ack num if any of them exceeds the limit of python number (2^32-1)
+def refactor_receiver_seq_ack():
+    global receiverSeqNum, receiverAckNum
+    
+    receiverSeqNum = receiverSeqNum - (2 ** 32 - 1) if receiverSeqNum > (2 ** 32 - 1) else receiverSeqNum
+    receiverAckNum = receiverAckNum - (2 ** 32 - 1) if receiverAckNum > (2 ** 32 - 1) else receiverAckNum
+    
+    return 
 
 # Generate an unsigned int of 32-bit (or 4 bytes) checksum for the payload
 def generate_checksum(payload):
@@ -81,6 +90,8 @@ def print_pkt_info(synBit, ackBit, finBit, seqNum, ackNum, checksum, payload):
 # Generate a header and make a packet for payload. Header size: (1-byte * 3) + (4-byte * 3) = 15 bytes
 def make_pkt(payload):
     global receiverSeqNum, receiverAckNum, synBit, ackBit, finBit, pktFormat
+    
+    refactor_receiver_seq_ack()
     
     checksum = generate_checksum(payload)
         
@@ -117,11 +128,13 @@ def perform_three_way_handshake():
     synPacket = make_pkt(b'SYN')
     udt_send(synPacket)
     receiverSeqNum += 1 # Increment Receiver seq num b/c of the phantom byte
+    refactor_receiver_seq_ack()
         
     # Receiver receives SYN/ACK packet sent by Sender
     response = udt_rcv()[0]
     seqNum = decompose_pkt(response)[3]
     receiverAckNum = seqNum + 1 # set Receiver ack num to be Sender seq num
+    refactor_receiver_seq_ack()
         
     # Receiver sends ACK packet with Sender's ISN + 1 (Y+1) to Sender
     synBit, ackBit = 0, 1
@@ -137,17 +150,20 @@ def perform_connection_termination():
     global ackBit, finBit, receiverSeqNum, receiverAckNum
     
     receiverAckNum += 1
+    refactor_receiver_seq_ack()
     
     # Receiver sends FIN/ACK packet to Sender
     ackBit, finBit = 1, 1
     ackFinPacket = make_pkt(b'ACK/FIN')
     udt_send(ackFinPacket)
     receiverSeqNum += 1
+    refactor_receiver_seq_ack()
     
     # Receiver receives ACK packet sent by Sender
     response = udt_rcv()[0]
     decompose_pkt(response)
     receiverAckNum += 1
+    refactor_receiver_seq_ack()
     
     ackBit, finBit = 0, 0
     
@@ -164,6 +180,8 @@ def perform_receiver_operation():
         # Event: Receive packet from Receiver
         rcvpkt = udt_rcv()[0]
         if rcvpkt:
+            refactor_receiver_seq_ack()
+            
             receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload = decompose_pkt(rcvpkt)
             if not is_corrupted(payload, checksum) and receivedFinBit == 1:
                 # Every in input file was received. Now receive FIN packet from Sender
@@ -183,6 +201,7 @@ def perform_receiver_operation():
                 sndpkt = make_pkt(b'')
                 udt_send(sndpkt)
                 receiverAckNum += 1
+                refactor_receiver_seq_ack()
             else:
                 # Received out-of-order packet. 
                 # Now send a acknowledgement packet with largest correct ack number (receiverAckNum - 1) to Sender.
@@ -191,6 +210,7 @@ def perform_receiver_operation():
                 udt_send(sndpkt)
                 # Revert current ack number back to receievrAckNum
                 receiverAckNum += 1
+                refactor_receiver_seq_ack()
                 
     return
             
@@ -215,6 +235,7 @@ if __name__ == '__main__':
     # Assume receiverSeqNum = X, receiverAckNum = 0
     receiverSeqNum = generate_random_initial_sequence_number()
     receiverAckNum = 0
+    refactor_receiver_seq_ack()
     
     # ------------------------------------  Basic Setup  ------------------------------------ 
     
@@ -251,8 +272,7 @@ if __name__ == '__main__':
     endTime = time.time()
 
     print('Time lapsed in seconds: {:0.2f}'.format(endTime - startTime))
-    
-    
+
     # For testing with Simulator
     os.system('python3 FileComparer.py apple.jpg OutputApple.jpg')
     

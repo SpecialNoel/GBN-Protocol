@@ -129,7 +129,17 @@ def udt_rcv():
 
 # Generate a random ISN for Sender from range [0, 2^32)
 def generate_random_initial_sequence_number():
-    return secrets.randbelow(2 ** 32)
+    return secrets.randbelow(2 ** 32) + (2 ** 32 - 1)
+
+# Refactor Sender seq num, ack num and sendbase if any of them exceeds the limit of python number (2^32-1)
+def refactor_sender_seq_ack_sendbase():
+    global senderSeqNum, senderAckNum, sendBase
+    
+    senderSeqNum = senderSeqNum - (2 ** 32 - 1) if senderSeqNum > (2 ** 32 - 1) else senderSeqNum
+    senderAckNum = senderAckNum - (2 ** 32 - 1) if senderAckNum > (2 ** 32 - 1) else senderAckNum
+    sendBase = sendBase - (2 ** 32 - 1) if sendBase > (2 ** 32 - 1) else sendBase
+    
+    return 
 
 # Generate an unsigned int of 32-bit (or 4 bytes) checksum for the payload
 def generate_checksum(payload):
@@ -147,6 +157,8 @@ def print_pkt_info(synBit, ackBit, finBit, seqNum, ackNum, checksum, payload):
 # Generate a header and make a packet for payload. Header size: (1-byte * 3) + (4-byte * 3) = 15 bytes
 def make_pkt(payload):
     global senderSeqNum, senderAckNum, synBit, ackBit, finBit, pktFormat
+    
+    refactor_sender_seq_ack_sendbase()
     
     # Calculate the checksum for payload
     checksum = generate_checksum(payload)
@@ -192,12 +204,14 @@ def perform_three_way_handshake():
     # Set Sender ack num to be Receiver seq num + 1
     seqNum = decompose_pkt(response)[3]
     senderAckNum = seqNum + 1
+    refactor_sender_seq_ack_sendbase()
         
     # Sender sends SYN/ACK packet with its ISN (Y) and Receiver's ISN+1 (X+1) to Receiver  
     synBit, ackBit = 1, 1
     synAckPacket = make_pkt(b'SYN/ACK')
     udt_send(synAckPacket)
     senderSeqNum += 1 # Increment Sender seq num because of the phantom byte
+    refactor_sender_seq_ack_sendbase()
         
     # Sender receives ACK packet sent by Receiver
     response = udt_rcv()[0]
@@ -217,17 +231,20 @@ def perform_connection_termination():
     finPacket = make_pkt(b'FIN')
     udt_send(finPacket)
     senderSeqNum += 1
+    refactor_sender_seq_ack_sendbase()
     
     # Sender receives ACK packet sent by Receiver
     response = udt_rcv()[0]
     decompose_pkt(response)
     senderAckNum += 1
+    refactor_sender_seq_ack_sendbase()
     
     # Sender sends ACK packet to Receiver
     ackBit = 1
     finPacket = make_pkt(b'ACK')
     udt_send(finPacket)
     senderSeqNum += 1
+    refactor_sender_seq_ack_sendbase()
     
     # Reset ACK and FIN bits to 0
     ackBit, finBit = 0, 0
@@ -237,7 +254,7 @@ def perform_connection_termination():
 # Perform Sender side GBN operations
 def perform_sender_operation():
     global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize, filename2
-    
+        
     # Used to keep track of whether filename2 is already sent by Sender or not
     filenameSent = False
         
@@ -256,6 +273,8 @@ def perform_sender_operation():
         if segmentIndex == numOfTotalSegments:
             perform_connection_termination()
             break
+        
+        refactor_sender_seq_ack_sendbase()
         
         # Event: Send packet to Receiver
         if senderSeqNum < sendBase + senderWindowSize:
@@ -281,6 +300,7 @@ def perform_sender_operation():
             
             # Increment senderSeqNum by 1 since we just sent a packet
             senderSeqNum += 1
+            refactor_sender_seq_ack_sendbase()
         
         # Event: Receive packet from Receiver
         rcvpkt = udt_rcv()[0]
@@ -289,6 +309,7 @@ def perform_sender_operation():
             if not is_corrupted(payload, checksum):
                 # Sender correctly acknowledged that Receiver has correctly received the packet, increment sendBase
                 sendBase = ackNum + 1
+                refactor_sender_seq_ack_sendbase()
                 
                 # Stop or start timer accordingly
                 if sendBase == senderSeqNum:
@@ -300,6 +321,8 @@ def perform_sender_operation():
         if not timer.is_alive():
             # Restart timer upon timeout
             timer, t_stop = start_timer()
+            
+            refactor_sender_seq_ack_sendbase()
                         
             # Retransmit N packets (i.e. all packets in the Sender window)
             for i in range(sendBase, senderSeqNum):
@@ -332,6 +355,8 @@ if __name__ == '__main__':
     # Assume senderSeqNum = Y, senderAckNum = 0
     senderSeqNum = generate_random_initial_sequence_number()
     senderAckNum = 0
+    sendBase = 0
+    refactor_sender_seq_ack_sendbase()
      
     # ------------------------------------  Basic Setup  ------------------------------------ 
     
