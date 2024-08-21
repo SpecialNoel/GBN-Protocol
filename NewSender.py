@@ -1,7 +1,7 @@
-# Sender.py
+# NewSender.py
 
-# Usage: python3 Sender.py -s senderIPAddress -p senderPortNumber -t filename1 filename2
-# Example: python3 Sender.py -s 127.0.0.1 -p 8888 -t Apple.jpg OutputApple.jpg
+# Usage: python3 NewSender.py -s senderIPAddress -p senderPortNumber -t filename1 filename2
+# Example: python3 NewSender.py -s 127.0.0.1 -p 8888 -t Apple.jpg OutputApple.jpg
 
 from pathlib import Path
 from socket import *
@@ -29,24 +29,18 @@ def read_file_content(filename):
 
     return content
 
-# Get a payload from the input file. Mostly it has 1009 bytes, but the last payload could have less
+# Get a payload from the input file. Mostly it is 1009 bytes, but the last payload could have less
 def get_one_payload_from_input_file(segmentIndex, numOfTotalSegments):
     global fileContent, payloadBufferSize
     
-    '''
-    Example: numOfTotalSegments = 81, payloadBufferSize = 1009, fileContent is the content in file
-         segmentIndex = 0: startingIndex = 0 * 1009 = 0
-         since segmentIndex != 81-1 = 80, endingIndex = 0 + 1009 = 1009
-         payload = fileContent[0, 1009], from 0th byte to 1008th byte
-    '''
-    
-    # Get the current segment, call it payload
     startingIndex = segmentIndex * payloadBufferSize
 
     if segmentIndex != numOfTotalSegments - 1:
+        # Regular segment; have 1009 bytes of payload
         endingIndex = startingIndex + payloadBufferSize
         payload = fileContent[startingIndex:endingIndex]
     else:
+        # Last segment; might have less than 1009 bytes of payload
         payload = fileContent[startingIndex:]
     
     return payload
@@ -86,8 +80,8 @@ def bind_socket_to_address_and_port():
 
 # ------------------------------------  Handle Timer  ------------------------------------ 
 
+# Provide feedback of being in timer while spinning
 def in_timer():
-    # Provide feedback of being in timer while spinning
     print('in timer')
     
     return
@@ -124,7 +118,7 @@ def udt_send(packet):
 def udt_rcv():
     global UDPSocket, messageBufferSize
 
-    # Receive packet of up to 1039 bytes, along with specified Receiver IP and port, from Receiver
+    # Receive packet of up to 1024 bytes, along with specified Receiver IP and port, from Receiver
     response, (socketIPAddress, socketPortNumber) = UDPSocket.recvfrom(messageBufferSize)
         
     return response, (socketIPAddress, socketPortNumber)
@@ -354,12 +348,16 @@ if __name__ == '__main__':
         fileSize = get_file_size(filename1)
     except FileNotFoundError as e:
         print('Error: %s - %s.' % (e.filename, e.strerror))
+        exit(0)
     
     # Read byte message of content from input file
     fileContent = read_file_content(filename1)
     
     # ------------------------------------  Handshake  ------------------------------------ 
     
+    # Before performing three-way handshake:
+    #   senderSeqNum should be Y
+    #   senderAckNum should be 0
     print('senderSeqNum:', senderSeqNum)
     print(f'senderAckNum: {senderAckNum} \n')
     
@@ -368,7 +366,7 @@ if __name__ == '__main__':
     
     # After performing three-way handshake:
     #   senderSeqNum should be Y + 1
-    #   senderAckNum should be X + 1
+    #   senderAckNum should be X + 1, where X is Receiver's seq num
     print(f'\nsenderSeqNum: {senderSeqNum}')
     print(f'senderAckNum: {senderAckNum} \n')
     

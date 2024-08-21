@@ -1,9 +1,9 @@
-# Receiver.py
+# NewReceiver.py
 
-# Usage: python3 Receiver.py -s serverIPAddress -p serverPortNumber
-# Example: python3 Receiver.py -s 127.0.0.1 -p 8888
+# Usage: python3 NewReceiver.py -s serverIPAddress -p serverPortNumber
+# Example: python3 NewReceiver.py -s 127.0.0.1 -p 8888
 
-# To execute Receiver.py, run the Sender side program (Sender.py) first.
+# To execute NewReceiver.py, run the Sender side program (NewSender.py) first.
 
 from socket import *
 import secrets
