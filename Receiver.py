@@ -12,8 +12,6 @@ import sys
 import time
 import zlib
 
-import os
-
 # ------------------------------------  Handle Files  ------------------------------------
 
 # Append content to a byte file
@@ -83,7 +81,7 @@ def print_pkt_info(synBit, ackBit, finBit, seqNum, ackNum, checksum, payload):
     print('Seq Num:', seqNum) # 4 bytes
     print('Ack Num:', ackNum) # 4 bytes
     print('Checksum:', checksum) # 4 bytes
-    print(f'Payload: {payload} \n') # up to 1024 bytes
+    #print(f'Payload: {payload} \n') # up to 1024 bytes
     
     return 
 
@@ -272,7 +270,3 @@ if __name__ == '__main__':
     endTime = time.time()
 
     print('Time lapsed in seconds: {:0.2f}'.format(endTime - startTime))
-
-    # For testing with Simulator
-    os.system('python3 FileComparer.py apple.jpg OutputApple.jpg')
-    

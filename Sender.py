@@ -6,12 +6,14 @@
 from pathlib import Path
 from socket import *
 import math
+import random
 import secrets
 import struct
 import sys
 import threading
 import time
 import zlib
+import _thread
 
 # ------------------------------------  Handle Files  ------------------------------------
 
@@ -150,7 +152,7 @@ def print_pkt_info(synBit, ackBit, finBit, seqNum, ackNum, checksum, payload):
     print('Seq Num:', seqNum)       # 4 bytes
     print('Ack Num:', ackNum)       # 4 bytes
     print('Checksum:', checksum)    # 4 bytes
-    print(f'Payload: {payload} \n') # up to 1024 bytes
+    #print(f'Payload: {payload} \n') # up to 1024 bytes
     
     return 
 
@@ -251,9 +253,69 @@ def perform_connection_termination():
     
     return
 
+def sender_send_op():
+    global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize, filename2
+
+    global filenameSent, numOfTotalSegments, timer
+    
+    if senderSeqNum < sendBase + senderWindowSize:
+            # Send filename to Receiver
+            if not filenameSent:
+                sendPayload = filename2.encode()
+                filenameSent = True
+            else:
+                # Send filecontent to Receiver
+                # Get current segment, then increment segment index by 1
+                sendPayload = get_one_payload_from_input_file(segmentIndex, numOfTotalSegments)
+                segmentIndex += 1
+            
+            # Make the segment a packet by adding a header to it
+            sndpkt[senderSeqNum] = make_pkt(sendPayload)
+            
+            # Simulate a potential packet loss event
+            # Randomly pick a number from 1 to 10
+            # Send the current packet if that number equals to 1, 2 or 3
+            # Otherwise, skip sending the packet when number is  4 to 10
+            # I.e. the packet has a probability of 70% to be lost
+            rand = random.randint(1, 10)
+            if rand <= 3:
+                # Send the packet to Receiver
+                udt_send(sndpkt[senderSeqNum])
+
+            # Start timer for the oldest on-flight packet
+            if sendBase == senderSeqNum:
+                timer, t_stop = start_timer()
+            
+            # Increment senderSeqNum by 1 since we just sent a packet
+            senderSeqNum += 1
+            refactor_sender_seq_ack_sendbase()
+    return 
+
+def sender_receive_op():
+    global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize, filename2
+    
+    global filenameSent, numOfTotalSegments, timer
+    
+    rcvpkt = udt_rcv()[0]
+    if rcvpkt:
+        receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload = decompose_pkt(rcvpkt)
+        if not is_corrupted(payload, checksum):
+            # Sender correctly acknowledged that Receiver has correctly received the packet, increment sendBase
+            sendBase = ackNum + 1
+            refactor_sender_seq_ack_sendbase()
+            
+            # Stop or start timer accordingly
+            if sendBase == senderSeqNum:
+                stop_timer(t_stop)
+            else:
+                timer, t_stop = start_timer()
+    return
+
 # Perform Sender side GBN operations
 def perform_sender_operation():
     global UDPSocket, sendBase, senderSeqNum, senderWindowSize, sndpkt, fileSize, payloadBufferSize, filename2
+    
+    global filenameSent, numOfTotalSegments, timer
         
     # Used to keep track of whether filename2 is already sent by Sender or not
     filenameSent = False
@@ -277,45 +339,10 @@ def perform_sender_operation():
         refactor_sender_seq_ack_sendbase()
         
         # Event: Send packet to Receiver
-        if senderSeqNum < sendBase + senderWindowSize:
-            # Send filename to Receiver
-            if not filenameSent:
-                sendPayload = filename2.encode()
-                filenameSent = True
-            else:
-                # Send filecontent to Receiver
-                # Get current segment, then increment segment index by 1
-                sendPayload = get_one_payload_from_input_file(segmentIndex, numOfTotalSegments)
-                segmentIndex += 1
-            
-            # Make the segment a packet by adding a header to it
-            sndpkt[senderSeqNum] = make_pkt(sendPayload)
-            
-            # Send the packet to Receiver
-            udt_send(sndpkt[senderSeqNum])
-
-            # Start timer for the oldest on-flight packet
-            if sendBase == senderSeqNum:
-                timer, t_stop = start_timer()
-            
-            # Increment senderSeqNum by 1 since we just sent a packet
-            senderSeqNum += 1
-            refactor_sender_seq_ack_sendbase()
+        _thread.start_new_thread(sender_send_op, ())
         
         # Event: Receive packet from Receiver
-        rcvpkt = udt_rcv()[0]
-        if rcvpkt:
-            receivedSynBit, receivedAckBit, receivedFinBit, seqNum, ackNum, checksum, payload = decompose_pkt(rcvpkt)
-            if not is_corrupted(payload, checksum):
-                # Sender correctly acknowledged that Receiver has correctly received the packet, increment sendBase
-                sendBase = ackNum + 1
-                refactor_sender_seq_ack_sendbase()
-                
-                # Stop or start timer accordingly
-                if sendBase == senderSeqNum:
-                    stop_timer(t_stop)
-                else:
-                    timer, t_stop = start_timer()
+        _thread.start_new_thread(sender_receive_op, ())
 
         # Event: Timeout
         if not timer.is_alive():
@@ -380,6 +407,8 @@ if __name__ == '__main__':
     
     # Read byte message of content from input file
     fileContent = read_file_content(filename1)
+    
+    timer, t_stop = start_timer()
     
     # ------------------------------------  Handshake  ------------------------------------ 
     
