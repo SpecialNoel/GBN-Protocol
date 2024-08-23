@@ -261,3 +261,4 @@ if __name__ == '__main__':
     # For testing with Simulator
     os.system('python3 FileComparer.py apple.jpg OutputApple.jpg')
     
+    
